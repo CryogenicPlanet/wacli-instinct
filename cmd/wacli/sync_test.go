@@ -1,9 +1,70 @@
 package main
 
 import (
+	"context"
+	"net"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	appPkg "github.com/openclaw/wacli/internal/app"
 )
+
+func TestSyncDisableSendDelegateLeavesNoSocket(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix sockets are unavailable")
+	}
+	cmd := newSyncCmd(&rootFlags{})
+	if err := cmd.ParseFlags([]string{"--disable-send-delegate"}); err != nil {
+		t.Fatal(err)
+	}
+	disabled, err := cmd.Flags().GetBool("disable-send-delegate")
+	if err != nil || !disabled {
+		t.Fatalf("flag not wired: %v", err)
+	}
+	shortDir, err := os.MkdirTemp("/tmp", "wacli-sync-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(shortDir) })
+	socket := filepath.Join(shortDir, ".send.sock")
+	started := false
+	var listener net.Listener
+	start := func(context.Context) error {
+		started = true
+		var err error
+		listener, err = net.Listen("unix", socket)
+		return err
+	}
+	t.Cleanup(func() {
+		if listener != nil {
+			_ = listener.Close()
+		}
+	})
+	if after := syncSendDelegateAfterConnect(appPkg.SyncModeFollow, disabled, start); after != nil {
+		t.Fatal("delegate callback installed in disabled mode")
+	}
+	if started {
+		t.Fatal("delegate started")
+	}
+	if _, err := os.Lstat(socket); !os.IsNotExist(err) {
+		t.Fatalf("delegate socket exists: %v", err)
+	}
+	if after := syncSendDelegateAfterConnect(appPkg.SyncModeFollow, false, start); after == nil {
+		t.Fatal("default follow mode lost delegate")
+	} else if err := after(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Lstat(socket)
+	if err != nil {
+		t.Fatal("enabled delegate not invoked:", err)
+	}
+	if fi.Mode()&os.ModeSocket == 0 {
+		t.Fatalf("delegate path is not a socket: %s", fi.Mode())
+	}
+}
 
 func TestSyncCommandExposesWebhookFlags(t *testing.T) {
 	cmd := newSyncCmd(&rootFlags{})

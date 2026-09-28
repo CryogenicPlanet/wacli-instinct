@@ -29,3 +29,6 @@ jobs:
           docker run --rm wacli:ci --version
           docker run --rm wacli:ci --help
           docker run --rm --entrypoint ffmpeg wacli:ci -version
+
+      - name: Build Instinct image
+        run: docker build --pull -f Dockerfile.instinct -t wacli-instinct:ci .

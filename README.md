@@ -1,19 +1,18 @@
-# wacli 🗃️ — WhatsApp from your terminal
+# wacli-instinct — WhatsApp read bridge for Instinct
+
+This MIT-licensed fork of [openclaw/wacli](https://github.com/openclaw/wacli) includes the original `wacli` CLI and a separate `wacli-instinct` worker. The worker supervises read-only message capture into a durable local outbox. See [Instinct deployment](docs/instinct.md) and [fork releases](docs/release.md). A live deployment needs a paired account, a verified group JID, encrypted persistent storage, and a first-party ingest endpoint.
 
 ![wacli banner](docs/assets/readme-banner.jpg)
 
-[![CI](https://img.shields.io/github/actions/workflow/status/openclaw/wacli/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/openclaw/wacli/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/openclaw/wacli?style=flat-square)](https://github.com/openclaw/wacli/releases/latest)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue?style=flat-square)](https://github.com/openclaw/wacli/releases/latest)
-[![License](https://img.shields.io/github/license/openclaw/wacli?style=flat-square)](LICENSE)
-[![Homebrew](https://img.shields.io/badge/Homebrew-openclaw%2Ftap-orange?style=flat-square)](https://github.com/openclaw/homebrew-tap)
-[![Docs](https://img.shields.io/badge/docs-wacli.sh-blue?style=flat-square)](https://wacli.sh)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
 `wacli` is a scriptable WhatsApp client for people and tools that work from the command line. It pairs as a linked device, mirrors messages into a local SQLite store, and supports search, sending, and chat management.
 
 > `wacli` uses the WhatsApp Web protocol through [`whatsmeow`](https://github.com/tulir/whatsmeow). It is not affiliated with WhatsApp or Meta.
 
 ## Install
+
+For this fork, download an archive from the [wacli-instinct releases](https://github.com/CryogenicPlanet/wacli-instinct/releases). Each archive contains both `wacli` and `wacli-instinct`, along with the [deployment guide](docs/instinct.md) and example Compose file. Verify its published checksum before installing the binaries. The options below install upstream `wacli` only; they do not include the Instinct worker.
 
 Homebrew on macOS or Linux:
 

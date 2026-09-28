@@ -1,0 +1,35 @@
+services:
+  wacli-instinct:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.instinct
+    image: wacli-instinct:local
+    container_name: wacli-instinct
+    restart: on-failure:5
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=0700
+    volumes:
+      - type: bind
+        source: ${INSTINCT_ENCRYPTED_DATA_DIR}
+        target: /data/instinct
+      - type: bind
+        source: ${INSTINCT_INGEST_TOKEN_PATH}
+        target: /run/secrets/ingest_token
+        read_only: true
+    environment:
+      INSTINCT_ACCOUNT_ID: ${INSTINCT_ACCOUNT_ID}
+      INSTINCT_CHAT_JIDS: ${INSTINCT_CHAT_JIDS}
+      INSTINCT_INGEST_URL: ${INSTINCT_INGEST_URL}
+      INSTINCT_INGEST_TOKEN_FILE: /run/secrets/ingest_token
+      INSTINCT_STORE_DIR: /data/instinct/store
+      INSTINCT_STATE_DIR: /data/instinct/state
+      INSTINCT_HTTP_ADDR: 127.0.0.1:8080
+      INSTINCT_SCAN_INTERVAL: 30s
+      INSTINCT_MAX_DB_SIZE: 2GB
+      INSTINCT_MAX_MESSAGES: 250000
+      INSTINCT_MAX_STATE_DB_BYTES: 536870912
+    pids_limit: 100
+    security_opt:
+      - no-new-privileges:true

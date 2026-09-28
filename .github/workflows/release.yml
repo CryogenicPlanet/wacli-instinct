@@ -1,41 +1,66 @@
-name: Release
+name: Release wacli-instinct
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: SemVer to release
-        required: true
-        type: string
+  push:
+    tags: ["v*-instinct.*"]
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
-  release:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: linux-amd64
+          - runner: macos-15
+            target: darwin-arm64
+          - runner: macos-15-intel
+            target: darwin-amd64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      - name: Test and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CGO_ENABLED=1 CGO_CFLAGS=-Wno-error=missing-braces
+          go test ./internal/instinct ./cmd/wacli-instinct
+          mkdir -p package
+          go build -tags sqlite_fts5 -trimpath -ldflags='-s -w' -o package/wacli ./cmd/wacli
+          go build -tags sqlite_fts5 -trimpath -ldflags='-s -w' -o package/wacli-instinct ./cmd/wacli-instinct
+          cp LICENSE README.md package/
+          mkdir -p package/deploy
+          cp -R docs package/docs
+          cp -R deploy/instinct package/deploy/instinct
+          tar -czf "wacli-instinct-${{ github.ref_name }}-${{ matrix.target }}.tar.gz" -C package .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ matrix.target }}
+          path: wacli-instinct-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
     permissions:
-      actions: read
-      checks: read
       contents: write
-      pull-requests: write
-      statuses: read
-    uses: openclaw/release-workflows/.github/workflows/release-go-cli.yml@v1
-    with:
-      version: ${{ inputs.version }}
-      repository-type: openclaw
-      homebrew-tap: openclaw/homebrew-tap
-      homebrew-formula: wacli
-      archive-files: '["LICENSE","README.md"]'
-      checksum-filename: checksums.txt
-      nfpm: disabled
-      split-goreleaser-config: .goreleaser-linux-windows.yaml
-      stable-identifier: org.openclaw.wacli
-      ci-check-events: '["push","pull_request"]'
-      reproducible-rebuild: non-darwin
-      strict-checks: false
-    secrets:
-      MACOS_SIGNING_P12: ${{ secrets.MACOS_SIGNING_P12 }}
-      MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
-      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-      ASC_PRIVATE_KEY_P8: ${{ secrets.ASC_PRIVATE_KEY_P8 }}
-      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v4.2.1
+        with:
+          pattern: '*'
+          merge-multiple: true
+          path: artifacts
+      - name: Checksums and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd artifacts
+          sha256sum *.tar.gz > checksums.txt
+          gh release create "${GITHUB_REF_NAME}" *.tar.gz checksums.txt --repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --notes "wacli-instinct fork release. Includes wacli and the read-only Instinct bridge. See docs/instinct.md for deployment and reliability limits."

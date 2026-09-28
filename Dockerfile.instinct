@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1
+FROM golang:1.27.1-alpine AS build
+RUN apk add --no-cache build-base git
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=1 CGO_CFLAGS="-Wno-error=missing-braces" go build -tags sqlite_fts5 -trimpath -o /out/wacli ./cmd/wacli \
+    && CGO_ENABLED=1 CGO_CFLAGS="-Wno-error=missing-braces" go build -tags sqlite_fts5 -trimpath -o /out/wacli-instinct ./cmd/wacli-instinct
+
+FROM alpine:3.24
+RUN apk add --no-cache ca-certificates tzdata \
+    && adduser -D -u 10001 -h /home/instinct instinct \
+    && mkdir -p /data/instinct/store /data/instinct/state \
+    && chown -R instinct:instinct /data/instinct \
+    && chmod 0700 /data/instinct /data/instinct/store /data/instinct/state
+COPY --from=build /out/wacli /usr/local/bin/wacli
+COPY --from=build /out/wacli-instinct /usr/local/bin/wacli-instinct
+ENV HOME=/home/instinct WACLI_STORE_DIR=/data/instinct/store INSTINCT_STORE_DIR=/data/instinct/store INSTINCT_STATE_DIR=/data/instinct/state INSTINCT_HTTP_ADDR=127.0.0.1:8080
+USER instinct
+HEALTHCHECK --interval=30s --timeout=5s --start-period=1m CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1
+ENTRYPOINT ["wacli-instinct"]

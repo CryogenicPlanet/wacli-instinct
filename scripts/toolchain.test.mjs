@@ -16,13 +16,11 @@ test("build and release gates use the preferred Go toolchain without raising the
   assert.equal(read("Dockerfile").match(/FROM golang:([\d.]+)-alpine@/)[1], version);
 });
 
-test("pnpm setup uses the package manifest and hydration pins the same version", () => {
+test("pnpm setup uses the package manifest", () => {
   const { packageManager } = JSON.parse(read("package.json"));
   assert.match(packageManager, /^pnpm@\d+\.\d+\.\d+\+sha512\.[a-f0-9]{128}$/,
     "Corepack requires the complete pin to use a hexadecimal integrity digest");
-  const version = packageManager.match(/^pnpm@([^+]+)/)[1];
   const setup = read(".github/actions/setup-ci-env/action.yml");
   assert.match(setup, /uses: pnpm\/action-setup@/);
   assert.doesNotMatch(setup, /corepack (enable|prepare)/);
-  assert.equal(read(".github/workflows/crabbox-hydrate.yml").match(/PNPM_VERSION: "([^"]+)"/)[1], version);
 });

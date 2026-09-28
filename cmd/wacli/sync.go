@@ -27,6 +27,7 @@ func newSyncCmd(flags *rootFlags) *cobra.Command {
 	var webhookAllowPrivate bool
 	var webhookEventsFlag string
 	var sendSpacingFlag string
+	var disableSendDelegate bool
 	var storage syncStorageLimitFlags
 
 	cmd := &cobra.Command{
@@ -93,17 +94,14 @@ func newSyncCmd(flags *rootFlags) *cobra.Command {
 					stopSendDelegate()
 				}
 			}()
-			var afterConnect func(context.Context) error
-			if mode == appPkg.SyncModeFollow {
-				afterConnect = func(ctx context.Context) error {
-					stop, err := startSendDelegateServer(ctx, a, sendSpacing)
-					if err != nil {
-						return err
-					}
-					stopSendDelegate = stop
-					return nil
+			afterConnect := syncSendDelegateAfterConnect(mode, disableSendDelegate, func(ctx context.Context) error {
+				stop, err := startSendDelegateServer(ctx, a, sendSpacing)
+				if err != nil {
+					return err
 				}
-			}
+				stopSendDelegate = stop
+				return nil
+			})
 
 			res, err := a.Sync(ctx, appPkg.SyncOptions{
 				Mode:                mode,
@@ -147,6 +145,7 @@ func newSyncCmd(flags *rootFlags) *cobra.Command {
 	cmd.Flags().DurationVar(&staleThreshold, "stale-threshold", 0, "force reconnect when keepalive failures last this long in follow mode (1s-<2m20s, 0 = disabled)")
 	cmd.Flags().StringVar(&presenceModeFlag, "presence-mode", string(appPkg.SyncPresenceModeNormal), "global sync presence behavior: normal or quiet")
 	cmd.Flags().StringVar(&sendSpacingFlag, "send-spacing", "", "pace delegated sends in follow mode by a fixed duration or random min-max range (e.g. 2s or 500ms-5s; default: disabled)")
+	cmd.Flags().BoolVar(&disableSendDelegate, "disable-send-delegate", false, "do not start the local send/mark-read delegate socket in follow mode")
 	cmd.Flags().BoolVar(&downloadMedia, "download-media", false, "download media in the background during sync")
 	cmd.Flags().BoolVar(&refreshContacts, "refresh-contacts", false, "refresh contacts from session store into local DB")
 	cmd.Flags().BoolVar(&refreshGroups, "refresh-groups", false, "refresh joined groups and participant snapshots (live)")
@@ -158,4 +157,11 @@ func newSyncCmd(flags *rootFlags) *cobra.Command {
 	cmd.Flags().Int64Var(&storage.maxMessages, "max-messages", 0, "maximum total messages to keep in the local DB before sync stops (0 = unlimited, or WACLI_SYNC_MAX_MESSAGES)")
 	cmd.Flags().StringVar(&storage.maxDBSize, "max-db-size", "", "maximum wacli.db disk usage before sync stops, e.g. 500MB or 2GB (default: WACLI_SYNC_MAX_DB_SIZE or unlimited)")
 	return cmd
+}
+
+func syncSendDelegateAfterConnect(mode appPkg.SyncMode, disabled bool, start func(context.Context) error) func(context.Context) error {
+	if mode != appPkg.SyncModeFollow || disabled {
+		return nil
+	}
+	return start
 }
