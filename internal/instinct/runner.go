@@ -258,11 +258,10 @@ func (r *Runner) start(ctx context.Context) (<-chan error, error) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		parseDone := make(chan struct{})
-		go func() { r.consumeEvents(stderr); close(parseDone) }()
-		err := cmd.Wait()
-		<-parseDone
-		done <- err
+		// StderrPipe is closed by Wait. Drain lifecycle events to EOF first so
+		// a fast child cannot lose a final logged_out event on process exit.
+		r.consumeEvents(stderr)
+		done <- cmd.Wait()
 	}()
 	return done, nil
 }

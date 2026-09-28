@@ -65,6 +65,41 @@ func TestZeroExitLoggedOutIsTerminal(t *testing.T) {
 	}
 }
 
+func TestFastChildExitDrainsLoggedOutBeforeDone(t *testing.T) {
+	cfg, _ := fixture(t)
+	bin := filepath.Join(t.TempDir(), "fast-wacli")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nprintf '%s\\n' '{\"event\":\"logged_out\"}' >&2\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	cfg.WacliBin = bin
+	c, err := OpenCapture(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	for i := 0; i < 100; i++ {
+		r := NewRunner(cfg, c)
+		done, err := r.start(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatalf("child %d exited with error: %v", i, err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("child %d did not exit", i)
+		}
+		if h := r.Health(); h.State != "re_pair_needed" {
+			t.Fatalf("child %d exit reported before logged_out: %+v", i, h)
+		}
+	}
+	if n := pending(t, c); n != 1 {
+		t.Fatalf("repair event duplicated across fast exits: %d", n)
+	}
+}
+
 func TestIngestRequiresDurableSuccessAndRecoversHealth(t *testing.T) {
 	cfg, source := fixture(t)
 	c, err := OpenCapture(cfg)
